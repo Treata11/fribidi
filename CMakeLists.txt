@@ -70,6 +70,7 @@ set(FRIBIDI_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/lib 
     ${CMAKE_CURRENT_SOURCE_DIR}/gen.tab
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/lib ## ##
 )
 
 # Subdirectories

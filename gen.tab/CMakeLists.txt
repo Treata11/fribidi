@@ -1,5 +1,8 @@
 # Native build settings
-set(NATIVE_C_ARGS -UHAVE_CONFIG_H -DHAVE_STRINGIZE -DDONT_HAVE_FRIBIDI_CONFIG_H)
+set(NATIVE_C_ARGS 
+    -DHAVE_STRINGIZE 
+    -DDONT_HAVE_FRIBIDI_CONFIG_H
+)
 check_include_file(stdlib.h HAVE_STDLIB_H_NATIVE)
 if(HAVE_STDLIB_H_NATIVE)
     list(APPEND NATIVE_C_ARGS -DHAVE_STDLIB_H)
@@ -25,23 +28,26 @@ install(FILES ${FRIBIDI_UNICODE_VERSION_H} DESTINATION include/fribidi)
 # Build gen-unicode-version
 add_executable(gen-unicode-version gen-unicode-version.c)
 target_include_directories(gen-unicode-version PRIVATE ${FRIBIDI_INCLUDE_DIRS})
-target_compile_definitions(gen-unicode-version PRIVATE ${NATIVE_C_ARGS})
+target_compile_definitions(gen-unicode-version PRIVATE 
+    ${NATIVE_C_ARGS}
+    HAVE_CONFIG_H=0  # Explicitly undefine HAVE_CONFIG_H
+)
 
-# Generate fribidi-unicode-version.h during build
+# Generate fribidi-unicode-version.h during build with explicit output
 add_custom_command(
-    OUTPUT ${FRIBIDI_UNICODE_VERSION_H}.build
+    OUTPUT ${FRIBIDI_UNICODE_VERSION_H}
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/gen-unicode-version
         ${CMAKE_CURRENT_SOURCE_DIR}/unidata/ReadMe.txt 
-        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt 
-        gen-unicode-version
+        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt
         > ${FRIBIDI_UNICODE_VERSION_H}
     DEPENDS gen-unicode-version 
         ${CMAKE_CURRENT_SOURCE_DIR}/unidata/ReadMe.txt 
         ${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt
     COMMENT "Generating fribidi-unicode-version.h"
+    VERBATIM
 )
 add_custom_target(generate-unicode-version 
-    DEPENDS ${FRIBIDI_UNICODE_VERSION_H}.build
+    DEPENDS ${FRIBIDI_UNICODE_VERSION_H}
 )
 
 set(COMPRESSION 2)
@@ -63,7 +69,7 @@ set(TAB_FILES_mirroring "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt")
 set(TAB_FILES_brackets "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiBrackets.txt;${CMAKE_CURRENT_SOURCE_DIR}/unidata/UnicodeData.txt")
 set(TAB_FILES_brackets-type "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiBrackets.txt")
 
-# Generate tab files
+# Generate tab files with dependency on unicode version
 foreach(TAB_NAME ${TAB_NAMES})
     set(GEN_PROG_NAME "gen-${TAB_NAME}-tab")
     set(GEN_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TAB_NAME}.tab.i")
@@ -74,24 +80,26 @@ foreach(TAB_NAME ${TAB_NAMES})
 
     add_executable(${GEN_PROG_NAME} gen-${TAB_NAME}-tab.c packtab.c)
     target_include_directories(${GEN_PROG_NAME} PRIVATE ${FRIBIDI_INCLUDE_DIRS})
-    target_compile_definitions(${GEN_PROG_NAME} PRIVATE ${NATIVE_C_ARGS})
+    target_compile_definitions(${GEN_PROG_NAME} PRIVATE 
+        ${NATIVE_C_ARGS}
+        HAVE_CONFIG_H=0
+    )
+    add_dependencies(${GEN_PROG_NAME} generate-unicode-version)  # Ensure unicode version is generated first
 
     add_custom_command(
-        OUTPUT ${GEN_OUTPUT}.build
+        OUTPUT ${GEN_OUTPUT}
         COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${GEN_PROG_NAME}
             ${COMPRESSION} 
-            ${TAB_FILES_${TAB_NAME}} 
-            ${GEN_PROG_NAME}
+            ${TAB_FILES_${TAB_NAME}}
             > ${GEN_OUTPUT}
         DEPENDS ${GEN_PROG_NAME} ${TAB_FILES_${TAB_NAME}}
         COMMENT "Generating ${TAB_NAME}.tab.i"
+        VERBATIM
     )
     list(APPEND GENERATED_TAB_INCLUDE_FILES ${GEN_OUTPUT})
 endforeach()
 
-add_custom_target(generate-tabs DEPENDS 
-    ${GENERATED_TAB_INCLUDE_FILES_BUILD}
-)
+add_custom_target(generate-tabs DEPENDS ${GENERATED_TAB_INCLUDE_FILES})
 
 # Export variables to parent scope
 set(FRIBIDI_UNICODE_VERSION_H ${FRIBIDI_UNICODE_VERSION_H} PARENT_SCOPE)
