@@ -32,18 +32,10 @@ if(WIN32)
 endif()
 
 # Generate config.h
-set(HAVE_MEMMOVE 0)
-set(HAVE_MEMSET 0)
-set(HAVE_STRDUP 0)
 check_function_exists(memmove HAVE_MEMMOVE)
 check_function_exists(memset HAVE_MEMSET)
 check_function_exists(strdup HAVE_STRDUP)
 
-set(HAVE_STDLIB_H 0)
-set(HAVE_STRING_H 0)
-set(HAVE_MEMORY_H 0)
-set(HAVE_STRINGS_H 0)
-set(HAVE_SYS_TIMES_H 0)
 check_include_file(stdlib.h HAVE_STDLIB_H)
 check_include_file(string.h HAVE_STRING_H)
 check_include_file(memory.h HAVE_MEMORY_H)
@@ -52,14 +44,20 @@ check_include_file(sys/times.h HAVE_SYS_TIMES_H)
 
 if(HAVE_STRINGS_H)
     set(STDC_HEADERS 1)
+else()
+    set(STDC_HEADERS 0)
 endif()
 set(HAVE_STRINGIZE 1)
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(DEBUG 1)
+else()
+    set(DEBUG 0)
 endif()
 if(NOT FRIBIDI_BUILD_DEPRECATED)
     set(FRIBIDI_NO_DEPRECATED 1)
+else()
+    set(FRIBIDI_NO_DEPRECATED 0)
 endif()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
@@ -69,8 +67,9 @@ set(FRIBIDI_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR} 
     ${CMAKE_CURRENT_SOURCE_DIR}/lib 
     ${CMAKE_CURRENT_SOURCE_DIR}/gen.tab
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/lib ## ##
+    ${CMAKE_CURRENT_BINARY_DIR}          # For config.h, fribidi-unicode-version.h
+    ${CMAKE_CURRENT_BINARY_DIR}/lib      # For fribidi-config.h
+    ${CMAKE_CURRENT_BINARY_DIR}/gen.tab  # For generated tab files like arabic-shaping.tab.i
 )
 
 # Subdirectories
