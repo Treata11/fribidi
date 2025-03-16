@@ -20,35 +20,83 @@ endif()
 set(FRIBIDI_UNICODE_VERSION_H ${CMAKE_BINARY_DIR}/fribidi-unicode-version.h)
 set(GENERATED_TAB_INCLUDE_FILES "")
 
-# Create placeholder files during configuration to satisfy CMake
-file(TOUCH ${FRIBIDI_UNICODE_VERSION_H})
+# Generate fribidi-unicode-version.h at configuration time
+find_program(CC_COMPILER ${CMAKE_C_COMPILER})
+if(NOT CC_COMPILER)
+    message(FATAL_ERROR "C compiler not found")
+endif()
+
+# Include directories matching FRIBIDI_INCLUDE_DIRS
+set(GEN_INCLUDE_DIRS 
+    -I${CMAKE_SOURCE_DIR}           # .../fribidi/
+    -I${CMAKE_SOURCE_DIR}/lib       # .../fribidi/lib/ (for common.h)
+    -I${CMAKE_SOURCE_DIR}/gen.tab   # .../fribidi/gen.tab/
+    -I${CMAKE_BINARY_DIR}           # .../build_macOS/ (for config.h)
+    -I${CMAKE_BINARY_DIR}/lib       # .../build_macOS/lib/ (for fribidi-config.h)
+    -I${CMAKE_BINARY_DIR}/gen.tab   # .../build_macOS/gen.tab/ (for generated files)
+)
+
+# Add macOS SDK sysroot
+if(APPLE)
+    # Use Xcode's default macOS SDK
+    execute_process(
+        COMMAND xcrun --sdk macosx --show-sdk-path
+        OUTPUT_VARIABLE MACOS_SDK_PATH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(NOT MACOS_SDK_PATH)
+        message(FATAL_ERROR "Failed to find macOS SDK path")
+    endif()
+    list(APPEND GEN_C_FLAGS -isysroot ${MACOS_SDK_PATH})
+endif()
+
+# Debug: Print compiler flags
+message("GEN_C_FLAGS: ${GEN_C_FLAGS}")
+message("GEN_INCLUDE_DIRS: ${GEN_INCLUDE_DIRS}")
+
+# Compile gen-unicode-version during configuration
+set(GEN_UNICODE_SRC ${CMAKE_SOURCE_DIR}/gen.tab/gen-unicode-version.c)
+set(GEN_UNICODE_BIN ${CMAKE_BINARY_DIR}/gen-unicode-version-temp)
+execute_process(
+    COMMAND ${CC_COMPILER} ${GEN_C_FLAGS} ${NATIVE_C_ARGS} -DHAVE_CONFIG_H=0
+            ${GEN_INCLUDE_DIRS}
+            ${GEN_UNICODE_SRC} -o ${GEN_UNICODE_BIN}
+    RESULT_VARIABLE COMPILE_RESULT
+    OUTPUT_VARIABLE COMPILE_OUTPUT
+    ERROR_VARIABLE COMPILE_ERROR
+)
+if(NOT COMPILE_RESULT EQUAL 0)
+    message(STATUS "Compile command: ${CC_COMPILER} ${GEN_C_FLAGS} ${NATIVE_C_ARGS} -DHAVE_CONFIG_H=0 ${GEN_INCLUDE_DIRS} ${GEN_UNICODE_SRC} -o ${GEN_UNICODE_BIN}")
+    message(STATUS "Compile output: ${COMPILE_OUTPUT}")
+    message(STATUS "Compile error: ${COMPILE_ERROR}")
+    message(FATAL_ERROR "Failed to compile gen-unicode-version")
+endif()
+
+# Run it to generate the header
+execute_process(
+    COMMAND ${GEN_UNICODE_BIN}
+            ${CMAKE_SOURCE_DIR}/gen.tab/unidata/ReadMe.txt 
+            ${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiMirroring.txt
+    OUTPUT_FILE ${FRIBIDI_UNICODE_VERSION_H}
+    RESULT_VARIABLE RUN_RESULT
+    OUTPUT_VARIABLE RUN_OUTPUT
+    ERROR_VARIABLE RUN_ERROR
+)
+if(NOT RUN_RESULT EQUAL 0)
+    message(STATUS "Run output: ${RUN_OUTPUT}")
+    message(STATUS "Run error: ${RUN_ERROR}")
+    message(FATAL_ERROR "Failed to run gen-unicode-version")
+endif()
+
+# Clean up temporary binary
+file(REMOVE ${GEN_UNICODE_BIN})
+
+# Mark as generated
 set_source_files_properties(${FRIBIDI_UNICODE_VERSION_H} PROPERTIES GENERATED TRUE)
 install(FILES ${FRIBIDI_UNICODE_VERSION_H} DESTINATION include/fribidi)
 
-# Build gen-unicode-version
-add_executable(gen-unicode-version gen-unicode-version.c)
-target_include_directories(gen-unicode-version PRIVATE ${FRIBIDI_INCLUDE_DIRS})
-target_compile_definitions(gen-unicode-version PRIVATE 
-    ${NATIVE_C_ARGS}
-    HAVE_CONFIG_H=0  # Explicitly undefine HAVE_CONFIG_H
-)
-
-# Generate fribidi-unicode-version.h during build with explicit output
-add_custom_command(
-    OUTPUT ${FRIBIDI_UNICODE_VERSION_H}
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/gen-unicode-version
-        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/ReadMe.txt 
-        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt
-        > ${FRIBIDI_UNICODE_VERSION_H}
-    DEPENDS gen-unicode-version 
-        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/ReadMe.txt 
-        ${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt
-    COMMENT "Generating fribidi-unicode-version.h"
-    VERBATIM
-)
-add_custom_target(generate-unicode-version 
-    DEPENDS ${FRIBIDI_UNICODE_VERSION_H}
-)
+# Empty target for compatibility
+add_custom_target(generate-unicode-version)
 
 set(COMPRESSION 2)
 
@@ -62,19 +110,18 @@ set(TAB_NAMES
     "brackets-type"
 )
 
-set(TAB_FILES_bidi-type "${CMAKE_CURRENT_SOURCE_DIR}/unidata/UnicodeData.txt")
-set(TAB_FILES_joining-type "${CMAKE_CURRENT_SOURCE_DIR}/unidata/UnicodeData.txt;${CMAKE_CURRENT_SOURCE_DIR}/unidata/ArabicShaping.txt")
-set(TAB_FILES_arabic-shaping "${CMAKE_CURRENT_SOURCE_DIR}/unidata/UnicodeData.txt")
-set(TAB_FILES_mirroring "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiMirroring.txt")
-set(TAB_FILES_brackets "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiBrackets.txt;${CMAKE_CURRENT_SOURCE_DIR}/unidata/UnicodeData.txt")
-set(TAB_FILES_brackets-type "${CMAKE_CURRENT_SOURCE_DIR}/unidata/BidiBrackets.txt")
+set(TAB_FILES_bidi-type "${CMAKE_SOURCE_DIR}/gen.tab/unidata/UnicodeData.txt")
+set(TAB_FILES_joining-type "${CMAKE_SOURCE_DIR}/gen.tab/unidata/UnicodeData.txt;${CMAKE_SOURCE_DIR}/gen.tab/unidata/ArabicShaping.txt")
+set(TAB_FILES_arabic-shaping "${CMAKE_SOURCE_DIR}/gen.tab/unidata/UnicodeData.txt")
+set(TAB_FILES_mirroring "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiMirroring.txt")
+set(TAB_FILES_brackets "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiBrackets.txt;${CMAKE_SOURCE_DIR}/gen.tab/unidata/UnicodeData.txt")
+set(TAB_FILES_brackets-type "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiBrackets.txt")
 
-# Generate tab files with dependency on unicode version
+# Generate tab files during build
 foreach(TAB_NAME ${TAB_NAMES})
     set(GEN_PROG_NAME "gen-${TAB_NAME}-tab")
     set(GEN_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TAB_NAME}.tab.i")
 
-    # Create placeholder file
     file(TOUCH ${GEN_OUTPUT})
     set_source_files_properties(${GEN_OUTPUT} PROPERTIES GENERATED TRUE)
 
@@ -84,7 +131,6 @@ foreach(TAB_NAME ${TAB_NAMES})
         ${NATIVE_C_ARGS}
         HAVE_CONFIG_H=0
     )
-    add_dependencies(${GEN_PROG_NAME} generate-unicode-version)  # Ensure unicode version is generated first
 
     add_custom_command(
         OUTPUT ${GEN_OUTPUT}
