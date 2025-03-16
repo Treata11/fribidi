@@ -4,11 +4,15 @@ project(fribidi
     LANGUAGES C
 )
 
+# Version components
+set(FRIBIDI_SHORT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+set(FRIBIDI_FULL_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+
 # Versioning
 set(INTERFACE_AGE 0)
 set(INTERFACE_VERSION 4)
 set(SOVERSION 0)
-set(LIBVERSION "${SOVERSION}.${INTERFACE_VERSION}.0")
+set(LIBVERSION "${SOVERSION}.${INTERFACE_VERSION}.${INTERFACE_AGE}")
 
 # Compiler setup
 include(CheckFunctionExists)
@@ -25,9 +29,9 @@ set(FRIBIDI_FUZZER_LDFLAGS "" CACHE STRING "Extra LDFLAGS for fuzzing binaries")
 set(FRIBIDI_STATIC_CARGS "")
 set(FRIBIDI_BUILD_CARGS "")
 if(WIN32)
-    set(FRIBIDI_BUILD_CARGS -DFRIBIDI_BUILD)
+    list(APPEND FRIBIDI_BUILD_CARGS -DFRIBIDI_BUILD)
     if(CMAKE_BUILD_TYPE STREQUAL "Static")
-        set(FRIBIDI_STATIC_CARGS -DFRIBIDI_LIB_STATIC)
+        list(APPEND FRIBIDI_STATIC_CARGS -DFRIBIDI_LIB_STATIC)
     endif()
 endif()
 
@@ -80,18 +84,18 @@ if(FRIBIDI_BUILD_BIN OR FRIBIDI_BUILD_TESTS)
 endif()
 
 # Pkg-config file
-find_package(PkgConfig)
+find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
     set(prefix "${CMAKE_INSTALL_PREFIX}")
-    set(exec_prefix "${CMAKE_INSTALL_PREFIX}")
-    set(libdir "${CMAKE_INSTALL_PREFIX}/lib")
-    set(includedir "${CMAKE_INSTALL_PREFIX}/include")
+    set(exec_prefix "\${prefix}")
+    set(libdir "\${exec_prefix}/lib")
+    set(includedir "\${prefix}/include")
     set(PACKAGE_NAME "GNU FriBidi")
     set(PACKAGE "fribidi")
-    set(VERSION "${PROJECT_VERSION}")
+    set(VERSION "${FRIBIDI_FULL_VERSION}")  # Use full version here
     set(FRIBIDI_CPPFLAGS "${FRIBIDI_STATIC_CARGS}")
-    set(ENABLE_SHARED_TRUE "") # Assume shared by default
-    set(ENABLE_SHARED_FALSE "#") # Comment out static flags
+    set(ENABLE_SHARED_TRUE "")
+    set(ENABLE_SHARED_FALSE "#")
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fribidi.pc.in ${CMAKE_CURRENT_BINARY_DIR}/fribidi.pc @ONLY)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/fribidi.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/fribidi.pc DESTINATION lib/pkgconfig)
 endif()
