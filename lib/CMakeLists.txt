@@ -67,12 +67,17 @@ set(FRIBIDI_SOURCES
     fribidi-shape.c
 )
 
+set(FRIBIDI_PUBLIC_HEADERS
+    ${FRIBIDI_HEADERS}
+    ${CMAKE_CURRENT_BINARY_DIR}/fribidi-config.h
+    ${CMAKE_BINARY_DIR}/config.h
+)
+
 ## TODO: Add sharedlib?
 add_library(fribidi STATIC  # Explicitly static since libfribidi.a
     ${FRIBIDI_SOURCES}
+    ${FRIBIDI_PUBLIC_HEADERS}
     ${FRIBIDI_UNICODE_VERSION_H}
-    ${CMAKE_CURRENT_BINARY_DIR}/fribidi-config.h
-    ${CMAKE_BINARY_DIR}/config.h
     ${GENERATED_TAB_INCLUDE_FILES}
 )
 target_include_directories(fribidi PUBLIC ${FRIBIDI_INCLUDE_DIRS})
@@ -87,9 +92,32 @@ set_target_properties(fribidi PROPERTIES
     VISIBILITY_INLINES_HIDDEN TRUE
     C_VISIBILITY_PRESET hidden
 )
+if(FRIBIDI_FRAMEWORK)
+    set_target_properties(fribidi PROPERTIES
+        FRAMEWORK TRUE
+        FRAMEWORK_VERSION "${FRIBIDI_FULL_VERSION}"
+        PRODUCT_BUNDLE_IDENTIFIER "github.com/fribidi/fribidi"
+        XCODE_ATTRIBUTE_INSTALL_PATH "@rpath"
+        PUBLIC_HEADER "${FRIBIDI_PUBLIC_HEADERS}"
+        OUTPUT_NAME "Fribidi"
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+        MACOSX_FRAMEWORK_IDENTIFIER "github.com/fribidi/fribidi"
+        MACOSX_FRAMEWORK_BUNDLE_VERSION "${FRIBIDI_FULL_VERSION}"
+        MACOSX_FRAMEWORK_SHORT_VERSION_STRING "${FRIBIDI_SHORT_VERSION}"
+        MACOSX_RPATH TRUE
+        # RESOURCE "${FRIBIDI_PUBLIC_HEADERS}"
+    )
+endif()
+
 add_dependencies(fribidi generate-unicode-version generate-tabs)
 install(TARGETS fribidi 
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
+    # RUNTIME DESTINATION bin
+    FRAMEWORK DESTINATION lib 
+    # COMPONENT runtime OPTIONAL
+    INCLUDES DESTINATION include/fribidi
+    PUBLIC_HEADER DESTINATION include/fribidi
 )

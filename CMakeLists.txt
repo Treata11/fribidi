@@ -25,6 +25,13 @@ option(FRIBIDI_BUILD_BIN "Build binaries" ON)
 option(FRIBIDI_BUILD_TESTS "Build tests" ON)
 set(FRIBIDI_FUZZER_LDFLAGS "" CACHE STRING "Extra LDFLAGS for fuzzing binaries")
 
+if(APPLE)
+    option(FRIBIDI_FRAMEWORK "Build as Apple Frameworks" OFF)
+endif()
+if(FRIBIDI_FRAMEWORK)
+    set(FRIBIDI_BUILD_BIN OFF)
+endif()
+
 # Handle Windows symbol visibility
 set(FRIBIDI_STATIC_CARGS "")
 set(FRIBIDI_BUILD_CARGS "")

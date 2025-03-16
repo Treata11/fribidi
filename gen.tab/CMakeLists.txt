@@ -20,7 +20,7 @@ endif()
 set(FRIBIDI_UNICODE_VERSION_H ${CMAKE_BINARY_DIR}/fribidi-unicode-version.h)
 set(GENERATED_TAB_INCLUDE_FILES "")
 
-# Generate fribidi-unicode-version.h at configuration time
+# Generate fribidi-unicode-version.h and tab files at configuration time for cross-compilation
 find_program(CC_COMPILER ${CMAKE_C_COMPILER})
 if(NOT CC_COMPILER)
     message(FATAL_ERROR "C compiler not found")
@@ -31,14 +31,13 @@ set(GEN_INCLUDE_DIRS
     -I${CMAKE_SOURCE_DIR}           # .../fribidi/
     -I${CMAKE_SOURCE_DIR}/lib       # .../fribidi/lib/ (for common.h)
     -I${CMAKE_SOURCE_DIR}/gen.tab   # .../fribidi/gen.tab/
-    -I${CMAKE_BINARY_DIR}           # .../build_macOS/ (for config.h)
-    -I${CMAKE_BINARY_DIR}/lib       # .../build_macOS/lib/ (for fribidi-config.h)
-    -I${CMAKE_BINARY_DIR}/gen.tab   # .../build_macOS/gen.tab/ (for generated files)
+    -I${CMAKE_BINARY_DIR}           # .../build_iOS/ (for config.h)
+    -I${CMAKE_BINARY_DIR}/lib       # .../build_iOS/lib/ (for fribidi-config.h)
+    -I${CMAKE_BINARY_DIR}/gen.tab   # .../build_iOS/gen.tab/ (for generated files)
 )
 
-# Add macOS SDK sysroot
+# Add macOS SDK sysroot for host compilation
 if(APPLE)
-    # Use Xcode's default macOS SDK
     execute_process(
         COMMAND xcrun --sdk macosx --show-sdk-path
         OUTPUT_VARIABLE MACOS_SDK_PATH
@@ -95,9 +94,6 @@ file(REMOVE ${GEN_UNICODE_BIN})
 set_source_files_properties(${FRIBIDI_UNICODE_VERSION_H} PROPERTIES GENERATED TRUE)
 install(FILES ${FRIBIDI_UNICODE_VERSION_H} DESTINATION include/fribidi)
 
-# Empty target for compatibility
-add_custom_target(generate-unicode-version)
-
 set(COMPRESSION 2)
 
 # Define tabs explicitly
@@ -117,35 +113,55 @@ set(TAB_FILES_mirroring "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiMirroring.txt")
 set(TAB_FILES_brackets "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiBrackets.txt;${CMAKE_SOURCE_DIR}/gen.tab/unidata/UnicodeData.txt")
 set(TAB_FILES_brackets-type "${CMAKE_SOURCE_DIR}/gen.tab/unidata/BidiBrackets.txt")
 
-# Generate tab files during build
+# Precompile and run tab generators during configuration
 foreach(TAB_NAME ${TAB_NAMES})
     set(GEN_PROG_NAME "gen-${TAB_NAME}-tab")
-    set(GEN_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TAB_NAME}.tab.i")
+    set(GEN_OUTPUT "${CMAKE_BINARY_DIR}/gen.tab/${TAB_NAME}.tab.i")
+    set(GEN_PROG_SRC "${CMAKE_SOURCE_DIR}/gen.tab/gen-${TAB_NAME}-tab.c;${CMAKE_SOURCE_DIR}/gen.tab/packtab.c")
+    set(GEN_PROG_BIN "${CMAKE_BINARY_DIR}/${GEN_PROG_NAME}-temp")
 
-    file(TOUCH ${GEN_OUTPUT})
+    # Compile the generator
+    execute_process(
+        COMMAND ${CC_COMPILER} ${GEN_C_FLAGS} ${NATIVE_C_ARGS} -DHAVE_CONFIG_H=0
+                ${GEN_INCLUDE_DIRS}
+                ${GEN_PROG_SRC} -o ${GEN_PROG_BIN}
+        RESULT_VARIABLE COMPILE_RESULT
+        OUTPUT_VARIABLE COMPILE_OUTPUT
+        ERROR_VARIABLE COMPILE_ERROR
+    )
+    if(NOT COMPILE_RESULT EQUAL 0)
+        message(STATUS "Compile command: ${CC_COMPILER} ${GEN_C_FLAGS} ${NATIVE_C_ARGS} -DHAVE_CONFIG_H=0 ${GEN_INCLUDE_DIRS} ${GEN_PROG_SRC} -o ${GEN_PROG_BIN}")
+        message(STATUS "Compile output: ${COMPILE_OUTPUT}")
+        message(STATUS "Compile error: ${COMPILE_ERROR}")
+        message(FATAL_ERROR "Failed to compile ${GEN_PROG_NAME}")
+    endif()
+
+    # Run it to generate the tab file
+    execute_process(
+        COMMAND ${GEN_PROG_BIN}
+                ${COMPRESSION} 
+                ${TAB_FILES_${TAB_NAME}}
+        OUTPUT_FILE ${GEN_OUTPUT}
+        RESULT_VARIABLE RUN_RESULT
+        OUTPUT_VARIABLE RUN_OUTPUT
+        ERROR_VARIABLE RUN_ERROR
+    )
+    if(NOT RUN_RESULT EQUAL 0)
+        message(STATUS "Run output: ${RUN_OUTPUT}")
+        message(STATUS "Run error: ${RUN_ERROR}")
+        message(FATAL_ERROR "Failed to run ${GEN_PROG_NAME}")
+    endif()
+
+    # Clean up temporary binary
+    file(REMOVE ${GEN_PROG_BIN})
+
     set_source_files_properties(${GEN_OUTPUT} PROPERTIES GENERATED TRUE)
-
-    add_executable(${GEN_PROG_NAME} gen-${TAB_NAME}-tab.c packtab.c)
-    target_include_directories(${GEN_PROG_NAME} PRIVATE ${FRIBIDI_INCLUDE_DIRS})
-    target_compile_definitions(${GEN_PROG_NAME} PRIVATE 
-        ${NATIVE_C_ARGS}
-        HAVE_CONFIG_H=0
-    )
-
-    add_custom_command(
-        OUTPUT ${GEN_OUTPUT}
-        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${GEN_PROG_NAME}
-            ${COMPRESSION} 
-            ${TAB_FILES_${TAB_NAME}}
-            > ${GEN_OUTPUT}
-        DEPENDS ${GEN_PROG_NAME} ${TAB_FILES_${TAB_NAME}}
-        COMMENT "Generating ${TAB_NAME}.tab.i"
-        VERBATIM
-    )
     list(APPEND GENERATED_TAB_INCLUDE_FILES ${GEN_OUTPUT})
 endforeach()
 
-add_custom_target(generate-tabs DEPENDS ${GENERATED_TAB_INCLUDE_FILES})
+# Empty targets for compatibility
+add_custom_target(generate-unicode-version)
+add_custom_target(generate-tabs)
 
 # Export variables to parent scope
 set(FRIBIDI_UNICODE_VERSION_H ${FRIBIDI_UNICODE_VERSION_H} PARENT_SCOPE)
