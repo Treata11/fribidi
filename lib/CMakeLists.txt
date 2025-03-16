@@ -70,13 +70,14 @@ set(FRIBIDI_SOURCES
 set(FRIBIDI_PUBLIC_HEADERS
     ${FRIBIDI_HEADERS}
     ${CMAKE_CURRENT_BINARY_DIR}/fribidi-config.h
-    ${CMAKE_BINARY_DIR}/config.h
+    ${CMAKE_BINARY_DIR}/fribidi-unicode-version.h
 )
 
 ## TODO: Add sharedlib?
 add_library(fribidi STATIC  # Explicitly static since libfribidi.a
     ${FRIBIDI_SOURCES}
     ${FRIBIDI_PUBLIC_HEADERS}
+    ${CMAKE_BINARY_DIR}/config.h
     ${FRIBIDI_UNICODE_VERSION_H}
     ${GENERATED_TAB_INCLUDE_FILES}
 )
